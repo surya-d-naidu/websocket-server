@@ -5,5 +5,3 @@ services:
     buildCommand: npm install
     startCommand: node index.js
     plan: free
-    ports:
-      - 8080
