@@ -5,8 +5,5 @@ services:
     buildCommand: npm install
     startCommand: node index.js
     plan: free
-    webService:
-      port: 8080
-      healthCheckPath: /
-      tls: true  # Automatically adds HTTPS (wss://)
-    timeout: 300
+    ports:
+      - 8080
