@@ -3,5 +3,5 @@ services:
     name: websocket-server
     env: node
     buildCommand: npm install
-    startCommand: node web-socket-server.js
+    startCommand: node websocket-server.js
     plan: free
