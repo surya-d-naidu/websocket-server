@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "websocket-server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node websocket-server.js"
   },
   "author": "surya-d-naidu",
   "license": "ISC",
