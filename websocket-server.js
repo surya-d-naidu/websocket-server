@@ -1,63 +1,45 @@
-const WebSocket = require('ws');
 const express = require('express');
+const WebSocket = require('ws');
+const http = require('http');
 
-// Express server to handle HTTP connections (if needed)
-express.json()
+// Initialize Express app
 const app = express();
 
-// Set up WebSocket server (on a Vercel deployment)
-const wss = new WebSocket.Server({ noServer: true });
+// Create an HTTP server using Express (this will handle both HTTP and WebSocket)
+const server = http.createServer(app);
 
-let mobileWs = null;  // Store the mobile WebSocket connection
+// Initialize WebSocket server to attach to the HTTP server
+const wss = new WebSocket.Server({ server });
 
-// Handle incoming WebSocket connections
+// WebSocket event handling
 wss.on('connection', (ws) => {
-  console.log('New WebSocket connection from mobile');
-  mobileWs = ws; // Save the WebSocket connection to communicate with mobile
+  console.log('A new WebSocket client connected.');
 
-  // Handle incoming WebSocket messages (e.g., requests from the HTTP relay server)
+  // Event listener for incoming messages
   ws.on('message', (message) => {
-    console.log('Received message from the cloud:', message);
-    // Handle the message (e.g., forward to LAN server, etc.)
+    console.log('Received message:', message.toString());
+
+    // Broadcast the message to all connected clients
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message.toString());
+      }
+    });
   });
 
-  // Handle WebSocket closure
+  // Event listener for client disconnection
   ws.on('close', () => {
-    console.log('Mobile WebSocket connection closed');
-    mobileWs = null;
+    console.log('A WebSocket client disconnected.');
   });
 });
 
-// Handle incoming HTTP requests (optional, in case you need to trigger WebSocket communication over HTTP)
-app.post('/relay', (req, res) => {
-  if (!mobileWs) {
-    return res.status(500).json({ error: 'No connection to mobile' });
-  }
-
-  // Forward the incoming HTTP request to the mobile WebSocket server
-  const requestData = {
-    method: req.method,
-    url: req.url,
-    headers: req.headers,
-    body: req.body,
-  };
-
-  // Send the data to the mobile via WebSocket
-  mobileWs.send(JSON.stringify(requestData));
-
-  // Await response from mobile
-  mobileWs.once('message', (response) => {
-    res.status(200).json({ data: response });
-  });
+// Basic HTTP route (Optional)
+app.get('/', (req, res) => {
+  res.send('Hello from Express HTTP server!');
 });
 
-// The WebSocket server needs to hook into the HTTP server to handle upgrade requests
-app.server = app.listen(8080, () => {
-  console.log('WebSocket server listening on port 8080');
-});
-
-app.server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request);
-  });
+// Start the server
+const port = 3000;
+server.listen(port, () => {
+  console.log(`Server started on http://localhost:${port}`);
 });
