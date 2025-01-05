@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const express = require('express');
 
 // Express server to handle HTTP connections (if needed)
+express.json()
 const app = express();
 
 // Set up WebSocket server (on a Vercel deployment)
