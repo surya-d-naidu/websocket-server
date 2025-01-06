@@ -33,8 +33,6 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', (message) => {
         try {
-            const data = JSON.parse(message);
-            
             // If message comes from client, forward to mobile
             if (clientWs.has(ws) && mobileWs) {
                 mobileWs.send(message);
