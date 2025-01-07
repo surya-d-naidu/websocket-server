@@ -11,12 +11,12 @@ const clientWs = new Set();
 
 wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection');
-    
+
     // First connection is treated as mobile
     if (!mobileWs) {
         mobileWs = ws;
         console.log('Mobile device connected');
-        
+
         ws.on('close', () => {
             console.log('Mobile disconnected');
             mobileWs = null;
@@ -24,7 +24,7 @@ wss.on('connection', (ws, req) => {
     } else {
         clientWs.add(ws);
         console.log('Client connected');
-        
+
         ws.on('close', () => {
             console.log('Client disconnected');
             clientWs.delete(ws);
@@ -48,6 +48,13 @@ wss.on('connection', (ws, req) => {
         }
     });
 });
+
+// Check if no mobile device is connected
+setInterval(() => {
+    if (!mobileWs) {
+        console.log('No mobile device connected');
+    }
+}, 5000);  // Check every 5 seconds
 
 httpServer.on('upgrade', (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (ws) => {
