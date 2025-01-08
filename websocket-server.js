@@ -9,64 +9,60 @@ const wss = new WebSocket.Server({ noServer: true });
 let mobileWs = null;
 const clientWs = new Set();
 
-// Handle WebSocket connections
-wss.on('connection', (ws) => {
-  console.log('New WebSocket connection');
+wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection');
 
-  // First connection is treated as mobile
-  if (!mobileWs) {
-    mobileWs = ws;
-    console.log('Mobile device connected');
+    // First connection is treated as mobile
+    if (!mobileWs) {
+        mobileWs = ws;
+        console.log('Mobile device connected');
 
-    ws.on('close', () => {
-      console.log('Mobile disconnected');
-      mobileWs = null;
-    });
-  } else {
-    clientWs.add(ws);
-    console.log('Client connected');
+        ws.on('close', () => {
+            console.log('Mobile disconnected');
+            mobileWs = null;
+        });
+    } else {
+        clientWs.add(ws);
+        console.log('Client connected');
 
-    ws.on('close', () => {
-      console.log('Client disconnected');
-      clientWs.delete(ws);
-    });
-  }
-
-  // Handle messages and forward between mobile and client
-  ws.on('message', (message) => {
-    try {
-      if (clientWs.has(ws) && mobileWs) {
-        mobileWs.send(message); // Forward from client to mobile
-      } else if (ws === mobileWs) {
-        for (const client of clientWs) {
-          client.send(message); // Forward from mobile to clients
-        }
-      }
-    } catch (error) {
-      console.error('Message processing error:', error);
+        ws.on('close', () => {
+            console.log('Client disconnected');
+            clientWs.delete(ws);
+        });
     }
-  });
 
-  // Heartbeat check for connection stability
-  ws.isAlive = true;
-  ws.on('pong', () => (ws.isAlive = true));
+    ws.on('message', (message) => {
+        try {
+            // If message comes from client, forward to mobile
+            if (clientWs.has(ws) && mobileWs) {
+                mobileWs.send(message);
+            }
+            // If message comes from mobile, find client by ID and respond
+            else if (ws === mobileWs) {
+                for (const client of clientWs) {
+                    client.send(message);
+                }
+            }
+        } catch (error) {
+            console.error('Message processing error:', error);
+        }
+    });
 });
 
-const interval = setInterval(() => {
-  wss.clients.forEach((ws) => {
-    if (!ws.isAlive) return ws.terminate();
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, 30000);
+// Check if no mobile device is connected
+setInterval(() => {
+    if (!mobileWs) {
+        console.log('No mobile device connected');
+    }
+}, 5000);  // Check every 5 seconds
 
 httpServer.on('upgrade', (req, socket, head) => {
-  wss.handleUpgrade(req, socket, head, (ws) => {
-    wss.emit('connection', ws, req);
-  });
+    wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit('connection', ws, req);
+    });
 });
 
 const port = process.env.PORT || 4000;
 httpServer.listen(port, () => {
-  console.log(`WebSocket relay server running on port ${port}`);
+    console.log(`WebSocket server running on port ${port}`);
 });
