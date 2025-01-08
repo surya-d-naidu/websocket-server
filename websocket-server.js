@@ -33,12 +33,18 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', (message) => {
         try {
+            // Parse incoming message to handle request IDs and message forwarding
+            const msg = JSON.parse(message);
+            const requestId = msg.id; // Extract request ID from message
+
             // If message comes from client, forward to mobile
             if (clientWs.has(ws) && mobileWs) {
+                console.log(`Forwarding message from client (ID: ${requestId}) to mobile`);
                 mobileWs.send(message);
             }
-            // If message comes from mobile, find client by ID and respond
+            // If message comes from mobile, forward to all clients
             else if (ws === mobileWs) {
+                console.log(`Forwarding message from mobile (ID: ${requestId}) to clients`);
                 for (const client of clientWs) {
                     client.send(message);
                 }
