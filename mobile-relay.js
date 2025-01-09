@@ -22,7 +22,7 @@ async function connectWebSocket() {
       }
       
       // Immediately send "we are venom" to identify as the mobile device
-      ws.send(validationToken);
+      ws.send(JSON.stringify(validationToken));
 
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);

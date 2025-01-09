@@ -16,7 +16,7 @@ wss.on('connection', (ws, req) => {
     ws.on('message', (message) => {
         try {
             // Special case: check for "we are venom" to identify the mobile device
-            if (message.message === "we are venom" && !mobileWs) {
+            if (message.message === "we are venom") {
                 // Assign the first WebSocket with this message as the mobile device
                 mobileWs = ws;
                 console.log('Mobile device connected');
