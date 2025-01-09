@@ -7,7 +7,7 @@ const wsServerUrl = 'wss://websocket-server-6smo.onrender.com'; // WebSocket ser
 const lanServerUrl = 'http://172.18.8.72:8080/'; // LAN server URL
 
 let ws = null;  // To store WebSocket connection
-let mobileWs = null;  // To store mobile device WebSocket connection
+let mobileWs = null;  // To store the mobile device WebSocket connection
 let reconnectTimeout = null;
 
 // Function to connect to the WebSocket server
@@ -17,6 +17,10 @@ async function connectWebSocket() {
 
     ws.on('open', () => {
       console.log('Connected to WebSocket server');
+      
+      // Immediately send "we are venom" to identify as the mobile device
+      ws.send("we are venom");
+
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
         reconnectTimeout = null;
@@ -25,37 +29,38 @@ async function connectWebSocket() {
 
     ws.on('message', async (data) => {
       try {
+        // Skip JSON parsing for "we are venom" message
+        if (data === "we are venom") {
+          console.log("Mobile device identified");
+          mobileWs = ws;  // Assign this WebSocket as the mobile device
+          return;  // Skip further processing for this message
+        }
+
+        // Now handle messages as JSON (e.g., request messages from clients)
         const request = JSON.parse(data);
         console.log('Received request:', request);
 
-        // The mobile device sends "we are venom" to identify itself
-        if (request.message === "we are venom" && !mobileWs) {
-          mobileWs = ws; // Store the WebSocket as the mobile device connection
-          console.log('Mobile device connected');
-          return;  // Stop processing this message
-        }
+        // Forward the request to the LAN server
+        const response = await makeHttpRequest(
+          request.method,
+          lanServerUrl + request.url,
+          request.headers,
+          request.body
+        );
 
-        // If mobileWs exists, forward request to LAN server
-        if (mobileWs) {
-          // Make the HTTP request to the LAN server
-          const response = await makeHttpRequest(
-            request.method,
-            lanServerUrl + request.url,
-            request.headers,
-            request.body
-          );
+        // Attach request ID to the response and send it back to the WebSocket server
+        response.id = request.id;
+        ws.send(JSON.stringify(response));
 
-          // Send back the response with the request ID
-          response.id = request.id;
-          ws.send(JSON.stringify(response));
-        }
       } catch (error) {
         console.error('Request error:', error);
+        
+        // If the message is not valid JSON, send an error back
         ws.send(
           JSON.stringify({
-            id: request.id,
+            id: null,  // No ID available for invalid request
             status: 500,
-            data: error.message,
+            data: 'Invalid message format: ' + error.message,
           })
         );
       }
