@@ -16,7 +16,7 @@ wss.on('connection', (ws, req) => {
     ws.on('message', (message) => {
         try {
             // Special case: check for "we are venom" to identify the mobile device
-            if (message === "we are venom" && !mobileWs) {
+            if (message.message === "we are venom" && !mobileWs) {
                 // Assign the first WebSocket with this message as the mobile device
                 mobileWs = ws;
                 console.log('Mobile device connected');
@@ -26,7 +26,7 @@ wss.on('connection', (ws, req) => {
                     console.log('Mobile disconnected');
                     mobileWs = null; // Reset mobileWs when it disconnects
                 });
-            } else if (mobileWs && message !== "we are venom") {
+            } else if (mobileWs && message.message !== "we are venom") {
                 // If the message is from a client (not the mobile device), forward it to the mobile device
                 if (clientWs.has(ws) && mobileWs) {
                     mobileWs.send(message);

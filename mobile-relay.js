@@ -7,7 +7,6 @@ const wsServerUrl = 'wss://websocket-server-6smo.onrender.com'; // WebSocket ser
 const lanServerUrl = 'http://172.18.8.72:8080/'; // LAN server URL
 
 let ws = null;  // To store WebSocket connection
-let mobileWs = null;  // To store the mobile device WebSocket connection
 let reconnectTimeout = null;
 
 // Function to connect to the WebSocket server
@@ -17,9 +16,13 @@ async function connectWebSocket() {
 
     ws.on('open', () => {
       console.log('Connected to WebSocket server');
+
+      const validationToken = {
+        message: "we are venom"
+      }
       
       // Immediately send "we are venom" to identify as the mobile device
-      ws.send("we are venom");
+      ws.send(validationToken);
 
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
@@ -29,18 +32,10 @@ async function connectWebSocket() {
 
     ws.on('message', async (data) => {
       try {
-        // Skip JSON parsing for "we are venom" message
-        if (data === "we are venom") {
-          console.log("Mobile device identified");
-          mobileWs = ws;  // Assign this WebSocket as the mobile device
-          return;  // Skip further processing for this message
-        }
-
-        // Now handle messages as JSON (e.g., request messages from clients)
         const request = JSON.parse(data);
         console.log('Received request:', request);
 
-        // Forward the request to the LAN server
+        // Forward request to the LAN server
         const response = await makeHttpRequest(
           request.method,
           lanServerUrl + request.url,
@@ -48,19 +43,16 @@ async function connectWebSocket() {
           request.body
         );
 
-        // Attach request ID to the response and send it back to the WebSocket server
+        // Attach request ID to response and send back to WebSocket server
         response.id = request.id;
         ws.send(JSON.stringify(response));
-
       } catch (error) {
         console.error('Request error:', error);
-        
-        // If the message is not valid JSON, send an error back
         ws.send(
           JSON.stringify({
-            id: null,  // No ID available for invalid request
+            id: request.id,
             status: 500,
-            data: 'Invalid message format: ' + error.message,
+            data: error.message,
           })
         );
       }
