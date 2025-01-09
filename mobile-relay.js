@@ -3,11 +3,11 @@ const http = require('http');
 const https = require('https');
 
 // WebSocket and LAN server URLs
-const wsServerUrl = 'wss://websocket-server-6smo.onrender.com'; // WebSocket server
-const lanServerUrl = 'http://172.18.8.72:8080/'; // LAN server
+const wsServerUrl = 'wss://websocket-server-6smo.onrender.com'; // WebSocket server URL
+const lanServerUrl = 'http://172.18.8.72:8080/'; // LAN server URL
 
-let ws = null; // To store the WebSocket connection
-let mobileWs = null; // To store the mobile device WebSocket connection
+let ws = null;  // To store WebSocket connection
+let mobileWs = null;  // To store mobile device WebSocket connection
 let reconnectTimeout = null;
 
 // Function to connect to the WebSocket server
@@ -28,17 +28,16 @@ async function connectWebSocket() {
         const request = JSON.parse(data);
         console.log('Received request:', request);
 
-        // Check if the message is from the mobile device
-        if (request.message && request.message === "we are venom" && !mobileWs) {
-          // If this is the mobile connection message, store the WebSocket connection
-          mobileWs = ws;
+        // The mobile device sends "we are venom" to identify itself
+        if (request.message === "we are venom" && !mobileWs) {
+          mobileWs = ws; // Store the WebSocket as the mobile device connection
           console.log('Mobile device connected');
-          return; // Ignore further processing of this message
+          return;  // Stop processing this message
         }
 
-        // If mobileWs is defined, route the request to LAN server
+        // If mobileWs exists, forward request to LAN server
         if (mobileWs) {
-          // Perform HTTP request to the LAN server
+          // Make the HTTP request to the LAN server
           const response = await makeHttpRequest(
             request.method,
             lanServerUrl + request.url,
@@ -46,13 +45,12 @@ async function connectWebSocket() {
             request.body
           );
 
-          // Attach the request ID to the response and send it back to the WebSocket server
+          // Send back the response with the request ID
           response.id = request.id;
           ws.send(JSON.stringify(response));
         }
       } catch (error) {
         console.error('Request error:', error);
-        // Send an error response if there was an issue processing the request
         ws.send(
           JSON.stringify({
             id: request.id,
@@ -71,7 +69,6 @@ async function connectWebSocket() {
     ws.on('error', (error) => {
       console.error('WebSocket error:', error);
     });
-
   } catch (error) {
     console.error('WebSocket connection error:', error);
     reconnectTimeout = setTimeout(connectWebSocket, 5000); // Retry connection
@@ -115,7 +112,7 @@ function makeHttpRequest(method, url, headers, body) {
             data: data.toString('base64'),
           });
         } else {
-          // For text data, replace "/jspui" with "/source/jspui"
+          // For text data, return the response data
           resolve({
             status: res.statusCode,
             headers: res.headers,
