@@ -1,10 +1,5 @@
 const WebSocket = require('ws');
-const http = require('http');
-const https = require('https');
-
-// WebSocket and LAN server URLs
 const wsServerUrl = 'wss://websocket-server-6smo.onrender.com'; // WebSocket server URL
-const lanServerUrl = 'http://172.18.8.72:8080/'; // LAN server URL
 
 let ws = null;  // To store WebSocket connection
 let reconnectTimeout = null;
@@ -17,11 +12,12 @@ async function connectWebSocket() {
     ws.on('open', () => {
       console.log('Connected to WebSocket server');
 
+      // Immediately send "we are venom" to identify as the mobile device
       const validationToken = {
         message: "we are venom"
-      }
+      };
       
-      // Immediately send "we are venom" to identify as the mobile device
+      // Send the token as a JSON string to identify as the mobile device
       ws.send(JSON.stringify(validationToken));
 
       if (reconnectTimeout) {
@@ -35,7 +31,7 @@ async function connectWebSocket() {
         const request = JSON.parse(data);
         console.log('Received request:', request);
 
-        // Forward request to the LAN server
+        // Forward request to the LAN server (this part is specific to your use case)
         const response = await makeHttpRequest(
           request.method,
           lanServerUrl + request.url,
@@ -72,14 +68,13 @@ async function connectWebSocket() {
   }
 }
 
-// Function to make HTTP requests to the LAN server
 function makeHttpRequest(method, url, headers, body) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const options = {
       method: method,
       headers: headers,
-      timeout: 30000, // 30 seconds timeout
+      timeout: 30000,
     };
 
     const req = parsedUrl.protocol === 'https:' ? https.request(parsedUrl, options) : http.request(parsedUrl, options);
@@ -102,14 +97,12 @@ function makeHttpRequest(method, url, headers, body) {
         const contentType = res.headers['content-type'];
 
         if (contentType && (contentType.includes('image') || contentType.includes('application/pdf'))) {
-          // For binary data (images, PDFs, etc.), return the data as base64
           resolve({
             status: res.statusCode,
             headers: res.headers,
-            data: data.toString('base64'),
+            data: data.toString('base64'), // Encode binary data as base64
           });
         } else {
-          // For text data, return the response data
           resolve({
             status: res.statusCode,
             headers: res.headers,

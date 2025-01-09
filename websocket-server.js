@@ -15,7 +15,6 @@ wss.on('connection', (ws, req) => {
     // Handle message reception
     ws.on('message', (message) => {
         try {
-            // Parse message to handle JSON messages
             const parsedMessage = JSON.parse(message);
 
             // Special case: check for "we are venom" to identify the mobile device
@@ -23,7 +22,7 @@ wss.on('connection', (ws, req) => {
                 // Assign the first WebSocket with this message as the mobile device
                 mobileWs = ws;
                 console.log('Mobile device connected');
-                
+
                 // Handle mobile WebSocket closing
                 ws.on('close', () => {
                     console.log('Mobile disconnected');
@@ -38,7 +37,7 @@ wss.on('connection', (ws, req) => {
                 // If the WebSocket is not the mobile device, it's treated as a client
                 clientWs.add(ws);
                 console.log('Client connected');
-                
+
                 // Handle client WebSocket closing
                 ws.on('close', () => {
                     console.log('Client disconnected');
