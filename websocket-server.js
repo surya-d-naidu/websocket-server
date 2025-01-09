@@ -17,6 +17,9 @@ wss.on('connection', (ws, req) => {
         mobileWs = ws;
         console.log('Mobile device connected');
 
+        // Send a welcome message to the mobile device
+        ws.send(JSON.stringify({ type: 'info', message: 'Welcome Mobile Device!' }));
+
         ws.on('close', () => {
             console.log('Mobile disconnected');
             mobileWs = null;
@@ -25,40 +28,65 @@ wss.on('connection', (ws, req) => {
         clientWs.add(ws);
         console.log('Client connected');
 
+        // Send a welcome message to the client
+        ws.send(JSON.stringify({ type: 'info', message: 'Welcome Client!' }));
+
         ws.on('close', () => {
             console.log('Client disconnected');
             clientWs.delete(ws);
         });
     }
 
+    // Handle incoming messages from clients and mobile
     ws.on('message', (message) => {
         try {
-            // Parse incoming message to handle request IDs and message forwarding
-            const msg = JSON.parse(message);
-            const requestId = msg.id; // Extract request ID from message
+            const parsedMessage = JSON.parse(message);
 
-            // If message comes from client, forward to mobile
-            if (clientWs.has(ws) && mobileWs) {
-                console.log(`Forwarding message from client (ID: ${requestId}) to mobile`);
-                mobileWs.send(message);
-            }
-            // If message comes from mobile, forward to all clients
-            else if (ws === mobileWs) {
-                console.log(`Forwarding message from mobile (ID: ${requestId}) to clients`);
-                for (const client of clientWs) {
-                    client.send(message);
+            if (parsedMessage.type === 'data') {
+                // Data message from client to mobile
+                if (clientWs.has(ws) && mobileWs) {
+                    mobileWs.send(JSON.stringify({ type: 'data', data: parsedMessage.data }));
+                    console.log(`Client sent data to mobile: ${parsedMessage.data}`);
+                }
+            } else if (parsedMessage.type === 'update') {
+                // Update from mobile to all clients
+                if (ws === mobileWs) {
+                    for (const client of clientWs) {
+                        client.send(JSON.stringify({ type: 'update', data: parsedMessage.data }));
+                        console.log(`Mobile sent update to client: ${parsedMessage.data}`);
+                    }
+                }
+            } else if (parsedMessage.type === 'status') {
+                // Query status from any client
+                if (ws !== mobileWs) {
+                    ws.send(JSON.stringify({ type: 'status', mobileStatus: mobileWs ? 'Connected' : 'Disconnected' }));
+                    console.log(`Client queried mobile status: ${mobileWs ? 'Connected' : 'Disconnected'}`);
                 }
             }
         } catch (error) {
             console.error('Message processing error:', error);
         }
     });
+
+    // Periodically send info to clients about the mobile device connection status
+    setInterval(() => {
+        if (ws !== mobileWs) {
+            ws.send(JSON.stringify({
+                type: 'info',
+                message: mobileWs ? 'Mobile device is connected' : 'No mobile device connected'
+            }));
+        }
+    }, 10000); // Send every 10 seconds
 });
 
-// Check if no mobile device is connected
+// Check if no mobile device is connected and broadcast info
 setInterval(() => {
     if (!mobileWs) {
         console.log('No mobile device connected');
+        // Broadcast the info to all connected clients
+        clientWs.forEach(client => {
+            client.send(JSON.stringify({ type: 'info', message: 'No mobile device connected' }));
+        });
     }
 }, 5000);  // Check every 5 seconds
 

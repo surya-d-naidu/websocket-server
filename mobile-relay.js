@@ -8,13 +8,15 @@ const lanServerUrl = 'http://172.18.8.72:8080/';
 let ws = null;
 let reconnectTimeout = null;
 
-// Connect to WebSocket
 function connectWebSocket() {
   ws = new WebSocket(wsServerUrl);
 
   ws.on('open', () => {
     console.log('Connected to WebSocket server');
-    clearTimeout(reconnectTimeout);
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
   });
 
   ws.on('message', async (data) => {
@@ -22,6 +24,7 @@ function connectWebSocket() {
       const request = JSON.parse(data);
       console.log('Received request:', request);
 
+      // Perform HTTP request to the LAN server
       const response = await makeHttpRequest(
         request.method,
         lanServerUrl + request.url,
@@ -30,15 +33,21 @@ function connectWebSocket() {
       );
 
       response.id = request.id;
-      ws.send(JSON.stringify(response)); // Send response
+      ws.send(JSON.stringify(response)); // Send response back via WebSocket
     } catch (error) {
-      console.error('Error:', error);
-      ws.send(JSON.stringify({ id: request.id, status: 500, data: error.message }));
+      console.error('Request error:', error);
+      ws.send(
+        JSON.stringify({
+          id: request.id,
+          status: 500,
+          data: error.message,
+        })
+      );
     }
   });
 
   ws.on('close', () => {
-    console.log('WebSocket connection closed. Reconnecting...');
+    console.log('WebSocket connection closed');
     reconnectTimeout = setTimeout(connectWebSocket, 5000);
   });
 
@@ -47,13 +56,12 @@ function connectWebSocket() {
   });
 }
 
-// HTTP Request Helper
 function makeHttpRequest(method, url, headers, body) {
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const options = {
-      method,
-      headers,
+      method: method,
+      headers: headers,
       timeout: 30000,
     };
 
@@ -75,11 +83,20 @@ function makeHttpRequest(method, url, headers, body) {
         const data = Buffer.concat(chunks);
 
         const contentType = res.headers['content-type'];
-        resolve({
-          status: res.statusCode,
-          headers: res.headers,
-          data: contentType.includes('image') ? data.toString('base64') : data.toString(),
-        });
+
+        if (contentType && (contentType.includes('image') || contentType.includes('application/pdf'))) {
+          resolve({
+            status: res.statusCode,
+            headers: res.headers,
+            data: data.toString('base64'), // Encode binary data as base64
+          });
+        } else {
+          resolve({
+            status: res.statusCode,
+            headers: res.headers,
+            data: data.toString().replace(/\/jspui/g, '/source/jspui'),
+          });
+        }
       });
     });
 
