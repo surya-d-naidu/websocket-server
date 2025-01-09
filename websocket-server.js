@@ -6,89 +6,60 @@ const app = express();
 const httpServer = http.createServer(app);
 const wss = new WebSocket.Server({ noServer: true });
 
-let mobileWs = null;  // This will store the mobile WebSocket connection
-const clientWs = new Set();  // This will store the client WebSocket connections
+let mobileWs = null;
+const clientWs = new Set();
 
 wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection');
-  
-    // Handle message reception
+
+    // First connection is treated as mobile
+    if (!mobileWs) {
+        mobileWs = ws;
+        console.log('Mobile device connected');
+
+        ws.on('close', () => {
+            console.log('Mobile disconnected');
+            mobileWs = null;
+        });
+    } else {
+        clientWs.add(ws);
+        console.log('Client connected');
+
+        ws.on('close', () => {
+            console.log('Client disconnected');
+            clientWs.delete(ws);
+        });
+    }
+
     ws.on('message', (message) => {
         try {
-            let parsedMessage;
-
-            // Try parsing the message as JSON
-            try {
-                parsedMessage = JSON.parse(message);
-                console.log('Parsed message:', parsedMessage);
-            } catch (e) {
-                // If parsing fails, handle the message as a string (if it's a non-JSON message)
-                console.log('Received non-JSON message:', message);
-                parsedMessage = { message };  // Fallback, treating the whole message as a string
+            if (clientWs.has(ws) && mobileWs) {
+                mobileWs.send(message);
             }
-
-            // Special case: check for "we are venom" to identify the mobile device
-            if (parsedMessage.message === "we are venom" && !mobileWs) {
-                // Assign the first WebSocket with this message as the mobile device
-                mobileWs = ws;
-                console.log('Mobile device connected');
-
-                // Handle mobile WebSocket closing
-                ws.on('close', () => {
-                    console.log('Mobile disconnected');
-                    mobileWs = null; // Reset mobileWs when it disconnects
-                });
-            } else if (mobileWs && parsedMessage.message !== "we are venom") {
-                // If the message is from a client (not the mobile device), forward it to the mobile device
-                if (clientWs.has(ws) && mobileWs) {
-                    console.log('Forwarding message from client to mobile device');
-                    mobileWs.send(message);
-                }
-            } else if (ws !== mobileWs) {
-                // If the WebSocket is not the mobile device, it's treated as a client
-                clientWs.add(ws);
-                console.log('Client connected');
-
-                // Handle client WebSocket closing
-                ws.on('close', () => {
-                    console.log('Client disconnected');
-                    clientWs.delete(ws);
-                });
-
-                // Forward messages from the mobile device to this client
-                if (mobileWs) {
-                    console.log('Forwarding message from mobile to client');
-                    ws.send(message); // Send any messages from the mobile device to clients
+            else if (ws === mobileWs) {
+                for (const client of clientWs) {
+                    client.send(message);
                 }
             }
         } catch (error) {
             console.error('Message processing error:', error);
         }
     });
-
-    // When a WebSocket connection closes, remove it from the client set if it's a client
-    ws.on('close', () => {
-        if (mobileWs !== ws) {
-            clientWs.delete(ws);
-        }
-    });
 });
 
-// Check every 5 seconds if a mobile device is connected
+// Check if no mobile device is connected
 setInterval(() => {
     if (!mobileWs) {
         console.log('No mobile device connected');
     }
-}, 5000);
+}, 5000);  // Check every 5 seconds
 
-// WebSocket upgrade handling (for handling HTTP upgrades to WebSocket)
 httpServer.on('upgrade', (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, req);
     });
 });
 
-// Start the HTTP server that handles WebSocket upgrades
 const port = process.env.PORT || 4000;
 httpServer.listen(port, () => {
     console.log(`WebSocket server running on port ${port}`);

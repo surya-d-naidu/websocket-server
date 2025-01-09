@@ -1,71 +1,59 @@
 const WebSocket = require('ws');
-const wsServerUrl = 'wss://websocket-server-6smo.onrender.com'; // WebSocket server URL
+const http = require('http');
+const https = require('https');
 
-let ws = null;  // To store WebSocket connection
+const wsServerUrl = 'wss://websocket-server-6smo.onrender.com';
+const lanServerUrl = 'http://172.18.8.72:8080/';
+
+let ws = null;
 let reconnectTimeout = null;
 
-// Function to connect to the WebSocket server
-async function connectWebSocket() {
-  try {
-    ws = new WebSocket(wsServerUrl);
+function connectWebSocket() {
+  ws = new WebSocket(wsServerUrl);
 
-    ws.on('open', () => {
-      console.log('Connected to WebSocket server');
+  ws.on('open', () => {
+    console.log('Connected to WebSocket server');
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+  });
 
-      // Immediately send "we are venom" to identify as the mobile device
-      const validationToken = {
-        message: "we are venom"
-      };
-      
-      // Send the token as a JSON string to identify as the mobile device
-      ws.send(JSON.stringify(validationToken));
+  ws.on('message', async (data) => {
+    try {
+      const request = JSON.parse(data);
+      console.log('Received request:', request);
 
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-        reconnectTimeout = null;
-      }
-    });
+      // Perform HTTP request to the LAN server
+      const response = await makeHttpRequest(
+        request.method,
+        lanServerUrl + request.url,
+        request.headers,
+        request.body
+      );
 
-    ws.on('message', async (data) => {
-      try {
-        const request = JSON.parse(data);
-        console.log('Received request:', request);
+      response.id = request.id;
+      ws.send(JSON.stringify(response)); // Send response back via WebSocket
+    } catch (error) {
+      console.error('Request error:', error);
+      ws.send(
+        JSON.stringify({
+          id: request.id,
+          status: 500,
+          data: error.message,
+        })
+      );
+    }
+  });
 
-        // Forward request to the LAN server (this part is specific to your use case)
-        const response = await makeHttpRequest(
-          request.method,
-          lanServerUrl + request.url,
-          request.headers,
-          request.body
-        );
+  ws.on('close', () => {
+    console.log('WebSocket connection closed');
+    reconnectTimeout = setTimeout(connectWebSocket, 5000);
+  });
 
-        // Attach request ID to response and send back to WebSocket server
-        response.id = request.id;
-        ws.send(JSON.stringify(response));
-      } catch (error) {
-        console.error('Request error:', error);
-        ws.send(
-          JSON.stringify({
-            id: request.id,
-            status: 500,
-            data: error.message,
-          })
-        );
-      }
-    });
-
-    ws.on('close', () => {
-      console.log('WebSocket connection closed');
-      reconnectTimeout = setTimeout(connectWebSocket, 5000);
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-    });
-  } catch (error) {
-    console.error('WebSocket connection error:', error);
-    reconnectTimeout = setTimeout(connectWebSocket, 5000); // Retry connection
-  }
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+  });
 }
 
 function makeHttpRequest(method, url, headers, body) {
@@ -117,5 +105,4 @@ function makeHttpRequest(method, url, headers, body) {
   });
 }
 
-// Start the WebSocket connection
 connectWebSocket();
