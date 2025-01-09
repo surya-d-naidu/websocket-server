@@ -6,43 +6,55 @@ const app = express();
 const httpServer = http.createServer(app);
 const wss = new WebSocket.Server({ noServer: true });
 
-let mobileWs = null;
-const clientWs = new Set();
+let mobileWs = null; // This will store the mobile WebSocket connection
+const clientWs = new Set(); // This will store the client WebSocket connections
 
 wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection');
 
-    // First connection is treated as mobile
-    if (!mobileWs) {
-        mobileWs = ws;
-        console.log('Mobile device connected');
-
-        ws.on('close', () => {
-            console.log('Mobile disconnected');
-            mobileWs = null;
-        });
-    } else {
-        clientWs.add(ws);
-        console.log('Client connected');
-
-        ws.on('close', () => {
-            console.log('Client disconnected');
-            clientWs.delete(ws);
-        });
-    }
-
     ws.on('message', (message) => {
         try {
-            if (clientWs.has(ws) && mobileWs) {
-                mobileWs.send(message);
-            }
-            else if (ws === mobileWs) {
-                for (const client of clientWs) {
-                    client.send(message);
+            // Check if the message is "we are venom" to identify the mobile device
+            if (message === "we are venom" && !mobileWs) {
+                // Assign the mobile device WebSocket connection
+                mobileWs = ws;
+                console.log('Mobile device connected');
+
+                // Handle the mobile WebSocket closing
+                ws.on('close', () => {
+                    console.log('Mobile disconnected');
+                    mobileWs = null;
+                });
+            } else if (mobileWs && message !== "we are venom") {
+                // If the message is from a client (not the mobile device), forward to mobile
+                if (clientWs.has(ws) && mobileWs) {
+                    mobileWs.send(message);
+                }
+            } else if (ws !== mobileWs) {
+                // If the WebSocket is not the mobile device, add it as a client
+                clientWs.add(ws);
+                console.log('Client connected');
+
+                // Handle client WebSocket closing
+                ws.on('close', () => {
+                    console.log('Client disconnected');
+                    clientWs.delete(ws);
+                });
+
+                // Forward message from mobile to the client
+                if (ws !== mobileWs) {
+                    ws.send(message);
                 }
             }
         } catch (error) {
             console.error('Message processing error:', error);
+        }
+    });
+
+    // In case the connection is from a client, we just add them to the client set
+    ws.on('close', () => {
+        if (mobileWs !== ws) {
+            clientWs.delete(ws);
         }
     });
 });
