@@ -11,11 +11,21 @@ const clientWs = new Set();  // This will store the client WebSocket connections
 
 wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection');
-
+  
     // Handle message reception
     ws.on('message', (message) => {
         try {
-            const parsedMessage = JSON.parse(message);
+            let parsedMessage;
+
+            // Try parsing the message as JSON
+            try {
+                parsedMessage = JSON.parse(message);
+                console.log('Parsed message:', parsedMessage);
+            } catch (e) {
+                // If parsing fails, handle the message as a string (if it's a non-JSON message)
+                console.log('Received non-JSON message:', message);
+                parsedMessage = { message };  // Fallback, treating the whole message as a string
+            }
 
             // Special case: check for "we are venom" to identify the mobile device
             if (parsedMessage.message === "we are venom" && !mobileWs) {
@@ -31,6 +41,7 @@ wss.on('connection', (ws, req) => {
             } else if (mobileWs && parsedMessage.message !== "we are venom") {
                 // If the message is from a client (not the mobile device), forward it to the mobile device
                 if (clientWs.has(ws) && mobileWs) {
+                    console.log('Forwarding message from client to mobile device');
                     mobileWs.send(message);
                 }
             } else if (ws !== mobileWs) {
@@ -46,6 +57,7 @@ wss.on('connection', (ws, req) => {
 
                 // Forward messages from the mobile device to this client
                 if (mobileWs) {
+                    console.log('Forwarding message from mobile to client');
                     ws.send(message); // Send any messages from the mobile device to clients
                 }
             }
