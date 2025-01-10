@@ -17,7 +17,7 @@ wss.on('connection', (ws, req) => {
             const data = JSON.parse(message);
             console.log('Received authentication message:', data);
 
-            if (data.auth === process.env.AUTH_CODE) {
+            if (data.auth === process.env.MOBILE_IDENTIFIER) {
                 console.log("Authentication successful for mobile device");
 
                 if (!mobileWs) {
