@@ -12,10 +12,10 @@ let reconnectTimeout = null;
 
 function connectWebSocket() {
   ws = new WebSocket(wsServerUrl);
-
+  
   ws.on('open', () => {
     console.log("Connected to WebSocket Mainframe");
-    ws.send(JSON.stringify({ auth: 'my-mobile-identifier' }));
+    ws.send(JSON.stringify({ auth: '' }));
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -44,7 +44,7 @@ function connectWebSocket() {
       console.error('Request error:', error);
       ws.send(
         JSON.stringify({
-          id: request.id || null,
+          id: 'random' || null,
           status: 500,
           data: error.message,
         })
