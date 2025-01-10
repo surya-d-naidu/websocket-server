@@ -11,8 +11,14 @@ let reconnectTimeout = null;
 function connectWebSocket() {
   ws = new WebSocket(wsServerUrl);
 
-  ws.on('open', () => {
-    console.log('Connected to WebSocket server');
+  ws.on('open', async () => {
+    const response = await makeHttpRequest(
+      request.method,
+      lanServerUrl + request.url,
+      request.headers,
+      request.body
+    );
+    console.log(JSON.parse(response).message);
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -94,8 +100,8 @@ function makeHttpRequest(method, url, headers, body) {
           resolve({
             status: res.statusCode,
             headers: res.headers,
-            data: data.toString().replace(/\/jspui/g, '/source/jspui'),
-          });
+            data: data.toString()
+            });
         }
       });
     });
