@@ -4,6 +4,8 @@ const https = require('https');
 
 const wsServerUrl = 'wss://websocket-server-6smo.onrender.com';
 const lanServerUrl = 'http://172.18.8.72:8080/';
+const reconnectInterval = 5000; // 5 seconds
+const requestTimeout = 30000; // 30 seconds
 
 let ws = null;
 let reconnectTimeout = null;
@@ -11,14 +13,9 @@ let reconnectTimeout = null;
 function connectWebSocket() {
   ws = new WebSocket(wsServerUrl);
 
-  ws.on('open', async () => {
-    const response = await makeHttpRequest(
-      request.method,
-      lanServerUrl + request.url,
-      request.headers,
-      request.body
-    );
-    console.log(JSON.parse(response).message);
+  ws.on('open', () => {
+    console.log("Connected to WebSocket Mainframe");
+    ws.send(JSON.stringify({ auth: 'my-mobile-identifier' }));
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -30,12 +27,15 @@ function connectWebSocket() {
       const request = JSON.parse(data);
       console.log('Received request:', request);
 
-      // Perform HTTP request to the LAN server
+      if (!request.id || !request.method || !request.url) {
+        throw new Error("Invalid request format: Missing 'id', 'method', or 'url'");
+      }
+
       const response = await makeHttpRequest(
         request.method,
         lanServerUrl + request.url,
-        request.headers,
-        request.body
+        request.headers || {},
+        request.body || null
       );
 
       response.id = request.id;
@@ -44,7 +44,7 @@ function connectWebSocket() {
       console.error('Request error:', error);
       ws.send(
         JSON.stringify({
-          id: request.id,
+          id: request.id || null,
           status: 500,
           data: error.message,
         })
@@ -54,7 +54,7 @@ function connectWebSocket() {
 
   ws.on('close', () => {
     console.log('WebSocket connection closed');
-    reconnectTimeout = setTimeout(connectWebSocket, 5000);
+    reconnectTimeout = setTimeout(connectWebSocket, reconnectInterval);
   });
 
   ws.on('error', (error) => {
@@ -68,7 +68,7 @@ function makeHttpRequest(method, url, headers, body) {
     const options = {
       method: method,
       headers: headers,
-      timeout: 30000,
+      timeout: requestTimeout,
     };
 
     const req = parsedUrl.protocol === 'https:' ? https.request(parsedUrl, options) : http.request(parsedUrl, options);
@@ -100,8 +100,8 @@ function makeHttpRequest(method, url, headers, body) {
           resolve({
             status: res.statusCode,
             headers: res.headers,
-            data: data.toString()
-            });
+            data: data.toString(),
+          });
         }
       });
     });
