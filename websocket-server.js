@@ -9,10 +9,10 @@ const wss = new WebSocket.Server({ noServer: true });
 let mobileWs = null;
 const clientWs = new Set();
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', (ws, message) => {
     console.log('New WebSocket connection');
 
-    // First connection is treated as mobile
+    
     const parsedMessage = JSON.parse(message);
 
     if (!mobileWs && parsedMessage.auth === process.env.MOBILE_IDENTIFIER) {
