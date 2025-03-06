@@ -6,85 +6,77 @@ const app = express();
 const httpServer = http.createServer(app);
 const wss = new WebSocket.Server({ noServer: true });
 
-let mobileWs = null;
-const clientWs = new Set();
+// Serve static files
+app.use(express.static('public'));
+
+let esp32Client = null;
+const webClients = new Set();
 
 wss.on('connection', (ws, req) => {
     console.log('New WebSocket connection established');
 
     ws.once('message', (message) => {
-        try {
-            const data = JSON.parse(message);
-            console.log('Received authentication message:', data);
-
-            if (data.auth === process.env.MOBILE_IDENTIFIER) {
-                console.log("Authentication successful for mobile device");
-
-                if (!mobileWs) {
-                    mobileWs = ws;
-                    console.log('Mobile device connected');
-
-                    ws.on('close', () => {
-                        console.log('Mobile device disconnected');
-                        mobileWs = null;
-                    });
-                } else {
-                    console.log('Another mobile device is already connected. Closing connection.');
-                    ws.close(1008, 'Duplicate mobile connection');
-                }
-            } else {
-                console.log("Authentication failed for client");
-                clientWs.add(ws);
-                console.log('Client connected');
-
+        const msg = message.toString();
+        
+        if (msg === 'ESP32_CONNECTED') {
+            if (!esp32Client) {
+                esp32Client = ws;
+                console.log('ESP32 connected');
+                
                 ws.on('close', () => {
-                    console.log('Client disconnected');
-                    clientWs.delete(ws);
+                    console.log('ESP32 disconnected');
+                    esp32Client = null;
                 });
+            } else {
+                console.log('Duplicate ESP32 connection attempt');
+                ws.close(1008, 'Only one ESP32 can connect at a time');
             }
-        } catch (error) {
-            console.error('Error parsing authentication message:', error.message);
-            ws.close(1008, 'Invalid message format');
+        } else {
+            // Regular web client
+            webClients.add(ws);
+            console.log('Web client connected');
+
+            ws.on('close', () => {
+                console.log('Web client disconnected');
+                webClients.delete(ws);
+            });
         }
     });
 
-    // Handle subsequent messages after authentication
+    // Handle subsequent messages
     ws.on('message', (message) => {
-        console.log('Received message:', message);
+        const msg = message.toString();
+        console.log('Received message:', msg);
 
         try {
-            // Forward message from client to mobile device
-            if (clientWs.has(ws) && mobileWs) {
-                console.log('Forwarding message from client to mobile device');
-                mobileWs.send(message);
+            // Forward messages from web clients to ESP32
+            if (webClients.has(ws) && esp32Client) {
+                console.log('Forwarding to ESP32:', msg);
+                esp32Client.send(msg);
             }
-            // Forward message from mobile device to all clients
-            else if (ws === mobileWs) {
-                console.log('Forwarding message from mobile device to clients');
-                for (const client of clientWs) {
-                    client.send(message);
-                }
-            } else {
-                console.log('Message received from an unrecognized WebSocket');
+            // Forward messages from ESP32 to all web clients
+            else if (ws === esp32Client) {
+                console.log('Broadcasting to web clients:', msg);
+                webClients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(msg);
+                    }
+                });
             }
         } catch (error) {
-            console.error('Message processing error:', error);
-            ws.send(
-                JSON.stringify({
-                    error: "Relay server encountered an error. Please try again later.",
-                })
-            );
+            console.error('Message handling error:', error);
         }
     });
 });
 
-// Check if no mobile device is connected
+// ESP32 connection check
 setInterval(() => {
-    if (!mobileWs) {
-        console.log('No mobile device connected');
+    if (!esp32Client) {
+        console.log('ESP32 not connected');
     }
-}, 5000); // Check every 5 seconds
+}, 5000);
 
+// Handle HTTP server upgrade
 httpServer.on('upgrade', (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, req);
@@ -92,6 +84,6 @@ httpServer.on('upgrade', (req, socket, head) => {
 });
 
 const port = process.env.PORT || 4000;
-httpServer.listen(port, () => {
-    console.log(`WebSocket server running on port ${port}`);
+httpServer.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on port ${port}`);
 });
