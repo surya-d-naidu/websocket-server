@@ -1,89 +1,76 @@
-const WebSocket = require('ws');
 const express = require('express');
-const http = require('http');
+const mongoose = require('mongoose');
+const cors = require('cors');
 
+// Connect to MongoDB
+mongoose.connect('mongodb+srv://helio-fos:F61m6zaMeGt3tmkc@raiseds25.gxwp27k.mongodb.net/?retryWrites=true&w=majority&appName=RaiseDS25', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+const db = mongoose.connection;
+db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+db.once('open', () => {
+  console.log('Connected to MongoDB');
+});
+
+// Define Submission schema
+const SubmissionSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  topic: { type: String, required: true },
+  abstract: { type: String, required: true },
+  email: { type: String, required: true },
+  mobile: { type: String, required: true },
+  institution: { type: String, required: true },
+});
+const Submission = mongoose.model('Submission', SubmissionSchema);
+
+// Initialize Express app
 const app = express();
-const httpServer = http.createServer(app);
-const wss = new WebSocket.Server({ noServer: true });
 
-// Serve static files
-app.use(express.static('public'));
+// Middleware
+app.use(express.json());
+app.use(cors()); // Enable CORS for frontend communication
 
-let esp32Client = null;
-const webClients = new Set();
+// Endpoint to collect submissions
+app.post('/submit', async (req, res) => {
+  try {
+    const { name, topic, abstract, email, mobile, institution } = req.body;
 
-wss.on('connection', (ws, req) => {
-    console.log('New WebSocket connection established');
-
-    ws.once('message', (message) => {
-        const msg = message.toString();
-        
-        if (msg === 'ESP32_CONNECTED') {
-            if (!esp32Client) {
-                esp32Client = ws;
-                console.log('ESP32 connected');
-                
-                ws.on('close', () => {
-                    console.log('ESP32 disconnected');
-                    esp32Client = null;
-                });
-            } else {
-                console.log('Duplicate ESP32 connection attempt');
-                ws.close(1008, 'Only one ESP32 can connect at a time');
-            }
-        } else {
-            // Regular web client
-            webClients.add(ws);
-            console.log('Web client connected');
-
-            ws.on('close', () => {
-                console.log('Web client disconnected');
-                webClients.delete(ws);
-            });
-        }
-    });
-
-    // Handle subsequent messages
-    ws.on('message', (message) => {
-        const msg = message.toString();
-        console.log('Received message:', msg);
-
-        try {
-            // Forward messages from web clients to ESP32
-            if (webClients.has(ws) && esp32Client) {
-                console.log('Forwarding to ESP32:', msg);
-                esp32Client.send(msg);
-            }
-            // Forward messages from ESP32 to all web clients
-            else if (ws === esp32Client) {
-                console.log('Broadcasting to web clients:', msg);
-                webClients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(msg);
-                    }
-                });
-            }
-        } catch (error) {
-            console.error('Message handling error:', error);
-        }
-    });
-});
-
-// ESP32 connection check
-setInterval(() => {
-    if (!esp32Client) {
-        console.log('ESP32 not connected');
+    // Basic validation
+    if (!name || !topic || !abstract || !email || !mobile || !institution) {
+      return res.status(400).json({ message: 'All fields are required' });
     }
-}, 5000);
 
-// Handle HTTP server upgrade
-httpServer.on('upgrade', (req, socket, head) => {
-    wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit('connection', ws, req);
+    // Validate mobile number: must start with +91 and have exactly 10 digits
+    if (!mobile.startsWith('+91') || mobile.length !== 13) {
+      return res.status(400).json({
+        message: 'Invalid mobile number. Must start with +91 and have 10 digits.',
+      });
+    }
+
+    // Create and save new submission
+    const newSubmission = new Submission({
+      name,
+      topic,
+      abstract,
+      email,
+      mobile,
+      institution,
     });
+    await newSubmission.save();
+
+    res.status(201).json({
+      message: 'Submission saved successfully',
+      submission: newSubmission,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
-const port = process.env.PORT || 4000;
-httpServer.listen(port, '0.0.0.0', () => {
-    console.log(`Server running on port ${port}`);
+// Start the server
+const PORT = process.env.PORT || 80;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
